@@ -1,38 +1,5 @@
 #!/bin/bash
 
-function process() {
-NAME=$1
-FILE=$2
-
-HERE=$(dirname $0)
-META=$HERE/mockups/$NAME/mockup.txt
-
-if [ ! -f $META ];
-then
-	echo "unknown mockup $NAME"
-	exit
-fi
-
-TARGET=$(cat $META | grep "target:" | cut -f 2 -d ':')
-
-# input : 640 x 1136
-# output : 1200 x 1268
-#  178X191 210X137 670X601 438X677
-
-# 0,0     640,0   640,1136   0,1136
-# 178,191 210,137 670,601   438,677
-#convert $FILE  -matte -virtual-pixel transparent  -distort Affine '0,0 178,191  640,0 210,137  640,1136 670,601 0,1136  438,677' -transform +repage out.png
-
-convert  $FILE -virtual-pixel transparent -define distort:viewport=1200x1268+0+0 -distort Perspective '0,0 178,191  640,0 410,137  640,1136 670,601   0,1136 438,677 '  \
-	out.png
-
-
-composite   ./out.png ./mockups/iphone-mockup-white/iphone-mockup-white-1.png out2.png
-
-open out2.png
-
-}
-
 ########################################################################
 ##        help                                                        ##
 ########################################################################
@@ -79,6 +46,8 @@ function process() {
 		exit
     fi
 
+    # TODO : check 'convert' is installed
+
 	INPUTSIZE=$(identify $INPUT | cut -f 3 -d ' ')
 	X=$(echo $INPUTSIZE | cut -f 1 -d 'x')
 	Y=$(echo $INPUTSIZE | cut -f 2 -d 'x')
@@ -88,6 +57,7 @@ function process() {
 	TARGETPOINTS=$(cat $MOCKS/$NAME/mockup.txt | grep "target:" | cut -f 2 -d ':' |  sed -e 's/^ *//' -e 's/ *$//' -e "s/ +/ /" )
 
 	BACKGROUND=$(cat $MOCKS/$NAME/mockup.txt | grep "background:" | cut -f 2 -d ':' |  sed -e 's/^ *//' -e 's/ *$//')
+	FOREGROUND=$(cat $MOCKS/$NAME/mockup.txt | grep "foreground:" | cut -f 2 -d ':' |  sed -e 's/^ *//' -e 's/ *$//')
 
 	P1=$(echo $TARGETPOINTS | cut -f 1 -d ' ' | sed -e "s/[xX]/,/g")
 	P2=$(echo $TARGETPOINTS | cut -f 2 -d ' ' | sed -e "s/[xX]/,/g")
@@ -96,10 +66,39 @@ function process() {
 
 	echo "screenshot input size : $INPUTSIZE"
 	echo "target size : $TARGETSIZE"
-	echo "target points : $TARGET"
+	echo "target points : $TARGETPOINTS"
 
 	echo "generating output image ..."
+
 	convert \
+		\( \
+			$MOCKS/$NAME/$BACKGROUND \
+			\( \
+				$INPUT \
+				-virtual-pixel transparent \
+				-define distort:viewport=${TARGETSIZE}+0+0 \
+				-distort Perspective "0,0 $P1  $X,0 $P2  $X,$Y $P3  0,$Y $P4 "  \
+				-matte \
+			\) \
+			-composite \
+		\) \
+		$MOCKS/$NAME/$FOREGROUND \
+		-composite \
+		$OUTPUT
+
+#		 \
+
+
+	echo "done."
+
+	# open $OUTPUT
+
+}
+
+function tmp {
+
+
+		convert \
 		$INPUT \
 		-virtual-pixel transparent \
 		-define distort:viewport=${TARGETSIZE}+0+0 \
@@ -107,10 +106,6 @@ function process() {
 		/tmp/out.png
 
 	composite /tmp/out.png $MOCKS/$NAME/$BACKGROUND $OUTPUT
-
-	echo "done."
-
-	# open $OUTPUT
 
 }
 
